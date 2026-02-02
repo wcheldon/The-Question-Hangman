@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>💘 Valentine Hangman</title>
+  <style>
+    :root { --bg:#0b0b12; --card:#141427; --text:#f7f7ff; --muted:#b7b7d6; --accent:#ff4d8d; --good:#4dffb5; --bad:#ff6b6b; }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1000px 700px at 50% -10%, #2a1840, var(--bg));
+      color:var(--text); min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px;
+    }
+    .card{
+      width:min(680px, 100%); background:rgba(20,20,39,.92);
+      border:1px solid rgba(255,255,255,.08); border-radius:20px;
+      padding:18px; box-shadow: 0 20px 70px rgba(0,0,0,.55);
+    }
+    h1{font-size: clamp(20px, 3.6vw, 28px); margin:0 0 6px}
+    .sub{color:var(--muted); margin:0 0 14px; font-size:14px}
+    .row{display:flex; gap:12px; flex-wrap:wrap}
+    .pill{
+      background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
+      padding:10px 12px; border-radius:999px; font-size:14px; color:var(--muted)
+    }
+    .status{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 14px}
+    .phrase{
+      font-size: clamp(20px, 4vw, 34px);
+      letter-spacing: 2px;
+      line-height: 1.25;
+      padding:14px 12px;
+      background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:16px;
+      text-align:center;
+      word-wrap:break-word;
+      user-select:none;
+    }
+    .keyboard{
+      display:grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap:10px;
+      margin-top:14px;
+    }
+    button.key{
+      appearance:none; border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06); color:var(--text);
+      border-radius:14px; padding:12px 0; font-weight:700;
+      font-size:16px;
+      touch-action: manipulation;
+    }
+    button.key:active{transform: scale(.98)}
+    button.key[disabled]{opacity:.35}
+    .controls{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap}
+    .btn{
+      border:0; border-radius:14px; padding:12px 14px; font-weight:800;
+      background:var(--accent); color:#16030b;
+      flex:1 1 160px;
+    }
+    .btn.secondary{
+      background:rgba(255,255,255,.08); color:var(--text);
+      border:1px solid rgba(255,255,255,.12);
+    }
+    .msg{margin-top:12px; font-size:15px}
+    .msg.good{color:var(--good)}
+    .msg.bad{color:var(--bad)}
+    .final{
+      margin-top:14px; padding:14px 12px;
+      border-radius:16px;
+      background:rgba(255,77,141,.10);
+      border:1px solid rgba(255,77,141,.25);
+      display:none;
+      text-align:center;
+    }
+    .final h2{margin:0 0 8px; font-size: clamp(18px, 3.6vw, 24px)}
+    .final .yn{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:10px}
+    .yn button{
+      border:0; border-radius:14px; padding:12px 16px; font-weight:900;
+      min-width:120px;
+    }
+    .yes{background:var(--good); color:#062015}
+    .no{background:rgba(255,255,255,.10); color:var(--text); border:1px solid rgba(255,255,255,.14)}
+    .tiny{font-size:12px; color:var(--muted); margin-top:10px}
+    @media (max-width:420px){
+      .keyboard{grid-template-columns: repeat(6, 1fr)}
+      button.key{border-radius:12px}
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>💘 Hangman</h1>
+    <p class="sub">Guess the phrase. You get <b>6</b> wrong guesses.</p>
+
+    <div class="status">
+      <div class="pill">Wrong: <b id="wrongCount">0</b>/6</div>
+      <div class="pill">Guessed: <span id="guessed">—</span></div>
+    </div>
+
+    <div class="phrase" id="phrase"></div>
+
+    <div class="keyboard" id="keyboard"></div>
+
+    <div class="controls">
+      <button class="btn secondary" id="hintBtn">Hint</button>
+      <button class="btn" id="resetBtn">Restart</button>
+    </div>
+
+    <div class="msg" id="msg"></div>
+
+    <div class="final" id="final">
+      <h2 id="finalTitle">Will you be my Valentine? 💌</h2>
+      <div class="yn">
+        <button class="yes" id="yesBtn">YES 💖</button>
+        <button class="no" id="noBtn">NO 😭</button>
+      </div>
+      <div class="tiny" id="tinyNote"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // ✅ Customize these:
+  const SECRET = "WILL YOU BE MY VALENTINE";
+  const HINT_TEXT = "It’s a question… 💘";
+  const YES_MESSAGE = "Aaaah yes!! 💖💖💖";
+  const NO_MESSAGES = [
+    "Wait… are you sure? 🥺",
+    "No is not an option 😭",
+    "Try again 😌",
+    "I’ll pretend I didn’t see that 😅"
+  ];
+
+  const MAX_WRONG = 6;
+
+  // State
+  let guessed = new Set();
+  let wrong = 0;
+  let noClicks = 0;
+
+  const phraseEl = document.getElementById("phrase");
+  const keyboardEl = document.getElementById("keyboard");
+  const wrongCountEl = document.getElementById("wrongCount");
+  const guessedEl = document.getElementById("guessed");
+  const msgEl = document.getElementById("msg");
+  const finalEl = document.getElementById("final");
+  const finalTitleEl = document.getElementById("finalTitle");
+  const tinyNoteEl = document.getElementById("tinyNote");
+
+  const hintBtn = document.getElementById("hintBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const yesBtn = document.getElementById("yesBtn");
+  const noBtn = document.getElementById("noBtn");
+
+  const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+  function renderPhrase() {
+    const upper = SECRET.toUpperCase();
+    let out = "";
+    let allDone = true;
+
+    for (const ch of upper) {
+      if (ch === " ") { out += "  "; continue; }
+      if (guessed.has(ch)) out += ch + " ";
+      else { out += "_ "; allDone = false; }
+    }
+
+    phraseEl.textContent = out.trim();
+    return allDone;
+  }
+
+  function renderKeyboard(disabledAll=false) {
+    keyboardEl.innerHTML = "";
+    for (const L of LETTERS) {
+      const b = document.createElement("button");
+      b.className = "key";
+      b.textContent = L;
+      b.disabled = disabledAll || guessed.has(L);
+      b.addEventListener("click", () => pick(L));
+      keyboardEl.appendChild(b);
+    }
+  }
+
+  function setMsg(text, kind="") {
+    msgEl.textContent = text || "";
+    msgEl.className = "msg" + (kind ? " " + kind : "");
+  }
+
+  function updateStatus() {
+    wrongCountEl.textContent = String(wrong);
+    const arr = [...guessed].sort();
+    guessedEl.textContent = arr.length ? arr.join(" ") : "—";
+  }
+
+  function endGame(win) {
+    renderKeyboard(true);
+    finalEl.style.display = "block";
+    if (win) {
+      finalTitleEl.textContent = "You got it! 💘 Will you be my Valentine?";
+      tinyNoteEl.textContent = "Tap YES 😌";
+      setMsg("Perfect 🥰", "good");
+    } else {
+      finalTitleEl.textContent = "So close… 😭 Still… will you be my Valentine?";
+      tinyNoteEl.textContent = "You can still say YES 👀";
+      setMsg("Out of guesses!", "bad");
+    }
+  }
+
+  function pick(L) {
+    if (guessed.has(L)) return;
+    guessed.add(L);
+
+    if (!SECRET.includes(L)) {
+      wrong++;
+      setMsg("Nope 😅", "bad");
+    } else {
+      setMsg("Nice! ✅", "good");
+    }
+
+    updateStatus();
+
+    const win = renderPhrase();
+    if (win) return endGame(true);
+    if (wrong >= MAX_WRONG) return endGame(false);
+
+    // disable that key
+    [...keyboardEl.children].forEach(btn => {
+      if (btn.textContent === L) btn.disabled = true;
+    });
+  }
+
+  function reset() {
+    guessed = new Set();
+    wrong = 0;
+    noClicks = 0;
+    finalEl.style.display = "none";
+    tinyNoteEl.textContent = "";
+    setMsg("");
+    updateStatus();
+    renderPhrase();
+    renderKeyboard(false);
+  }
+
+  hintBtn.addEventListener("click", () => {
+    setMsg(HINT_TEXT, "");
+  });
+
+  resetBtn.addEventListener("click", reset);
+
+  yesBtn.addEventListener("click", () => {
+    finalTitleEl.textContent = YES_MESSAGE;
+    tinyNoteEl.textContent = "Screenshot this 😌💖";
+    noBtn.disabled = true;
+    yesBtn.disabled = true;
+    setMsg("W!!!! 💘", "good");
+    // Optional: confetti vibe
+    document.body.style.background = "radial-gradient(1000px 700px at 50% -10%, #3b1f2f, #0b0b12)";
+  });
+
+  noBtn.addEventListener("click", () => {
+    noClicks++;
+    const msg = NO_MESSAGES[Math.min(noClicks-1, NO_MESSAGES.length-1)];
+    setMsg(msg, "");
+    // Make "NO" harder to press (playful)
+    noBtn.style.transform = `translate(${(Math.random()*60-30).toFixed(0)}px, ${(Math.random()*30-15).toFixed(0)}px)`;
+    if (noClicks >= 4) {
+      noBtn.textContent = "OK FINE 😭";
+    }
+  });
+
+  // Init
+  reset();
+})();
+</script>
+</body>
+</html>
